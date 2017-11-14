@@ -5,10 +5,6 @@
 // warranty, express or implied, as to its usefulness for any purpose.
 
 
-//Debug lines
-#define DEBUG_ROLLUP_TIMING
-//#define DEBUG_ROLLUP_TEMP
-
 #include "Arduino.h"
 #include "EEPROM.h"
 #include "elapsedMillis.h"
@@ -16,6 +12,9 @@
 #ifndef GreenhouseLib_h
 #define GreenhouseLib_h
 
+//Debug lines (remove comment markers(//) to display infos on serial monitor)
+//#define DEBUG_ROLLUP_TIMING
+//#define DEBUG_ROLLUP_TEMP
 
 
 
