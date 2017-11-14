@@ -1,5 +1,6 @@
 //Uncomment to enable serial communication
-//#define DEBUG
+//#define DEBUG_OVERVIEW
+//#define DEBUG_ROLLUP
 
 //Libraries
 #include "Arduino.h"
@@ -14,8 +15,8 @@
 #define BUTTON_PAD      A0  //connect this pin to an analog four button pad
 #define ONE_WIRE_BUS    A1 //connect this pin to the DS18B20 data line
 #define MENU_PIN        2  //link this pin to ground with an on/off switch in between
-#define OPENING_PIN     11 //connect this pin to the opening relay
-#define CLOSING_PIN     10 //connect this pin to the closing relay
+#define OPENING_PIN     12 //connect this pin to the opening relay
+#define CLOSING_PIN     11 //connect this pin to the closing relay
 
 //Create rollup object
 Rollup rollup1; //Pin 11 => opening relay; pin 10 => closing relay
@@ -37,7 +38,6 @@ const long debouncingDelay = 80;  //button debouncing delay (range between 50 an
 boolean firstPrint = true;  //tells if the text on the LCD has been printed already
 boolean control = true;     //tells if in mode control or menu
 
-float targetTemp = 20;      //target temperature for the greenhouse
 
 void setup() {
 
@@ -49,19 +49,18 @@ void setup() {
   pinMode(BUTTON_PAD, INPUT_PULLUP);
   pinMode(ONE_WIRE_BUS, INPUT_PULLUP);
   pinMode(MENU_PIN, INPUT_PULLUP);
-
   sensors.begin(); //start communication with temp probe
-  rollup1.initOutputs(FIX_TEMP,OPENING_PIN,CLOSING_PIN);
+  rollup1.initOutputs(FIX_TEMP, ACT_HIGH, OPENING_PIN,CLOSING_PIN);
 
 // IF IT IS YOUR FIRST UPLOAD  ----->
 
   //Uncomment the following line to load new parameters in EEPROM,
-  //rollup1.setParametersinEEPROM(25, 1, 25, 25, 5, 5, true);
+  rollup1.setParametersInEEPROM(20, 1, 25, 25, 5, 5, true);
 
 //Then put back the comment markers and upload again to allow new settings
 
   //PARAMETERS :
-  //Activation temperature : 25C
+  //Activation temperature : 20C
   //hysteresis : 1C
   //Rotation time (Up): 25 sec
   //Rotation time (Down): 25 sec
@@ -89,11 +88,12 @@ void loop() {
 
   printState(); //Print parameters of the rollup through serial line (if DEBUG is defined)
   rollup1.EEPROMUpdate(); //Update EEPPROM settings if necessary
+  
 }
 
 
 void printState(){
-  #ifdef DEBUG
+  #ifdef DEBUG_OVERVIEW
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= debugInterval) {
     previousMillis = currentMillis;
@@ -206,6 +206,7 @@ int readButtonState(){
 float greenhouseTemperature(){
   sensors.requestTemperatures();
   float temp = sensors.getTempCByIndex(0);
+
   return temp;
 }
 
@@ -235,7 +236,7 @@ void lcdPrintTemp(){
 }
 
 void lcdPrintTempCible(){
-      lcd.setCursor(8,0);lcd.print("|");lcd.print(targetTemp + rollup1._tempParameter); lcd.print(F("C "));
+      lcd.setCursor(8,0);lcd.print("|");lcd.print(rollup1._tempParameter); lcd.print(F("C "));
 }
 
 void lcdPrintDigits(int digits){
