@@ -16,7 +16,7 @@
 Timezone::Timezone(){
   _localIndex = TIMEZONE_INDEX + _index;
   _index += 5;
-  _previousMillis = 0;
+  EEPROMTimer = 0;
 }
 
 Timezone::~Timezone(){}
@@ -33,7 +33,7 @@ void Timezone::setParameters(byte type, byte hour, byte min, float targetTemp){
 	setTemp(targetTemp);
 }
 void Timezone::setTime( short mod){
-	if (_type == SR){		
+	if (_type == SR){
 		short Time[3];
 		Time[HEURE] = sunRise[HEURE];
 		Time[MINUTE] = sunRise[MINUTE] + mod;
@@ -41,7 +41,7 @@ void Timezone::setTime( short mod){
 		_hour = (byte)Time[HEURE];
 		_min = (byte)Time[MINUTE];
 	}
-	else if (_type == SS){		
+	else if (_type == SS){
 		short Time[3];
 		Time[HEURE] = sunSet[HEURE];
 		Time[MINUTE] = sunSet[MINUTE] + mod;
@@ -51,7 +51,7 @@ void Timezone::setTime( short mod){
 	}
 }
 void Timezone::setTime(byte hour, byte min){
-	if (_type == CLOCK){		
+	if (_type == CLOCK){
 		_hour = hour;
 		_min = min;
 	}
@@ -69,18 +69,18 @@ void Timezone::setMod(short mod){
 void Timezone::loadEEPROMParameters(){
   setType(EEPROM.read(_localIndex+TYPE_INDEX));
   setMod((short)EEPROM.read(_localIndex+MOD_INDEX));
-  
+
   if ((_type == SR)||(_type == SS)){
 	  setTime((short)EEPROM.read(_localIndex+MOD_INDEX));
   }
   else if(_type == CLOCK){
   	  setTime(EEPROM.read(_localIndex+HOUR_INDEX), EEPROM.read(_localIndex+MIN_INDEX));
   }
-  
+
   setTemp((float)EEPROM.read(_localIndex+TARGET_INDEX));
 }
 
-void Timezone::setParametersInEEPROM(byte type, short mod, float targetTemp){	
+void Timezone::setParametersInEEPROM(byte type, short mod, float targetTemp){
 	setTimeInEEPROM(type, mod);
 	setTempInEEPROM(targetTemp);
 }
@@ -91,7 +91,7 @@ void Timezone::setParametersInEEPROM(byte type, byte hour, byte min, float targe
 }
 
 void Timezone::setTimeInEEPROM(byte type, short mod){
-	if ((type == SR)&&((mod >= -60) && (mod <= 60))){		
+	if ((type == SR)&&((mod >= -60) && (mod <= 60))){
 		short Time[3];
 		Time[HEURE] = sunRise[HEURE];
 		Time[MINUTE] = sunRise[MINUTE] + mod;
@@ -101,7 +101,7 @@ void Timezone::setTimeInEEPROM(byte type, short mod){
 		EEPROM.update(_localIndex+TYPE_INDEX, type);
 		EEPROM.update(_localIndex+MOD_INDEX, mod);
 	}
-	else if ((type == SS)&&((mod >= -60) && (mod <= 60))){		
+	else if ((type == SS)&&((mod >= -60) && (mod <= 60))){
 		short Time[3];
 		Time[HEURE] = sunSet[HEURE];
 		Time[MINUTE] = sunSet[MINUTE] + mod;
@@ -128,9 +128,9 @@ void Timezone::setTempInEEPROM(float targetTemp){
 
 void Timezone::EEPROMUpdate(){
   unsigned long currentMillis = millis();
-  if (currentMillis - _previousMillis >= _interval) {
-    _previousMillis = currentMillis;
-    
+  if (EEPROMTimer > 10000) {
+    EEPROMTimer = 0;
+
     if(_type != EEPROM.read(_localIndex+ TYPE_INDEX)){
     		EEPROM.update(_localIndex+TYPE_INDEX, _type);
     }
@@ -154,7 +154,6 @@ static unsigned short Timezone::_index = 0;
 static short Timezone::sunRise[3] = {0};
 static short Timezone::sunSet[3] = {0};
 
-static const unsigned long Timezone::_interval = 10000;
 
 
 unsigned long rampingE(){
@@ -195,14 +194,17 @@ Constructor : Define Opening and Closing pins on the arduino, to connect to the 
 Increment counter is set to 100 so the program recognize the first opening/closing run.
 */
 Rollup::Rollup(){
-  _debug = false;
   _routine = true;
+  _closing = false;
+  _opening = false;
   _closingCycle = false;
   _openingCycle = false;
-  _incrementCounter = 100;
+  _safetyCycle = false;
+  _incrementCounter = OFF_VAL;
+  _stage = OFF_VAL;
   _localIndex = ROLLUP_INDEX + _index;
   _index += 7;
-  _previousMillis = 0;
+  EEPROMTimer = 0;
 }
 
 /*
@@ -210,14 +212,29 @@ Destructor
 */
 Rollup::~Rollup(){}
 
-void Rollup::initOutputs(byte mode, byte rOpen, byte rClose){
+void Rollup::initOutputs(byte mode, boolean relayType, byte rOpen, byte rClose){
+
   pinMode(rOpen, OUTPUT);
-  digitalWrite(rOpen, LOW);
   pinMode(rClose, OUTPUT);
-  digitalWrite(rClose, LOW);
+
+  if(relayType == ACT_HIGH){
+  	digitalWrite(rOpen, LOW);
+  	digitalWrite(rClose, LOW);
+  }
+  else if (relayType == ACT_LOW){
+  	digitalWrite(rOpen, HIGH);
+  	digitalWrite(rClose, HIGH);
+  }
   _openingPin = rOpen;
   _closingPin = rClose;
   _mode = mode;
+  _relayType = relayType;
+}
+
+void Rollup::initStage(byte stage, float mod, byte inc){
+  _stages = stage;
+  _stageMod[stage] = mod;
+  _stageInc[stage] = inc;
 }
 /*
 Open or close the rollups by increments when a certain temperature is reached
@@ -226,20 +243,23 @@ Adjust to the internal target temperature (Mode FIX_TEMP)
 void Rollup::routine(float temp){
   if (_mode == FIX_TEMP){
   	 if(_routine == true){
+     #ifdef DEBUG_ROLLUP_TEMP
+       Serial.println("------------");
+       Serial.print("Temperature :  ");
+       Serial.println(temp);
+       Serial.print("Opening temp : ");
+       Serial.println(_tempParameter);
+       Serial.print("Closing temp : ");
+       Serial.println(_tempParameter-_hyst);
+       Serial.println("-------------");
+     #endif
       if ((temp < (_tempParameter - _hyst))||(_closingCycle == true)) {
-        if (_openingCycle == false){
         	closingSides();
-        }
       } else if ((temp > _tempParameter)||(_openingCycle == true)) {
-        if (_closingCycle == false){
         	openSides();
-        }
       }
     }
-  }
-
-  else{
-    _debug = true;
+    safetyCycle();
   }
 }
 /*
@@ -250,23 +270,256 @@ void Rollup::routine(float target, float temp){
   if (_mode == VAR_TEMP){
   	 if(_routine == true){
       float activationTemp = target + _tempParameter;
+      #ifdef DEBUG_ROLLUP_TEMP
+        Serial.println("------------");
+        Serial.print("Temperature :  ");
+        Serial.println(temp);
+        Serial.print("Opening temp : ");
+        Serial.println(target+_tempParameter);
+        Serial.print("Closing temp : ");
+        Serial.println(target+_tempParameter-_hyst);
+        Serial.println("-------------");
+      #endif
+
       if ((temp < (activationTemp - _hyst))||(_closingCycle == true)) {
-        if (_openingCycle == false){
         	closingSides();
-        }
       } else if ((temp > activationTemp)||(_openingCycle == true)) {
-        if (_closingCycle == false){
         	openSides();
-        }
       }
     }
-  }
-
-  else{
-    _debug = true;
+    safetyCycle();
   }
 }
 
+void Rollup::manualRoutine(float target, float temp){
+  if (_mode == MAN_TEMP){
+  	if(_routine == true){
+      float targetTemp = target + _tempParameter;
+
+      #ifdef DEBUG_ROLLUP_TEMP
+        Serial.println("------------");
+        Serial.print("Temperature :  ");
+        Serial.println(temp);
+        Serial.print("Stage 1 : Opening temp : ");
+        Serial.println(targetTemp + _stageMod[1]);
+        Serial.print("Stage 1 : Closing temp : ");
+        Serial.println(targetTemp + _stageMod[1] -_hyst);
+        Serial.print("Stage 2 : Opening temp : ");
+        Serial.println(targetTemp + _stageMod[2]);
+        Serial.print("Stage 2 : Closing temp : ");
+        Serial.println(targetTemp + _stageMod[2] -_hyst);
+        Serial.print("Stage 3 : Opening temp : ");
+        Serial.println(targetTemp + _stageMod[3]);
+        Serial.print("Stage 3 : Closing temp : ");
+        Serial.println(targetTemp + _stageMod[3] -_hyst);
+        Serial.print("Stage 4 : Opening temp : ");
+        Serial.println(targetTemp + _stageMod[4]);
+        Serial.print("Stage 4 : Closing temp : ");
+        Serial.println(targetTemp + _stageMod[4] -_hyst);
+        Serial.println("-------------");
+      #endif
+
+
+      if (((temp >= targetTemp + _stageMod[4])&&(_stage == OFF_VAL))||(_stage == 4)){
+        if (_stages >= 4){
+          openToInc(4, _stageInc[4]);
+        }
+      }
+      else if (((temp >= targetTemp + _stageMod[3])&&(_stage == OFF_VAL))||(_stage == 3)){
+        if (_stages >= 3){
+          openToInc(3, _stageInc[3]);
+        }
+      }
+      else if (((temp >= targetTemp + _stageMod[2])&&(_stage == OFF_VAL))||(_stage == 2)){
+        if (_stages >= 2){
+          openToInc(2, _stageInc[2]);
+        }
+      }
+      else if (((temp >= targetTemp + _stageMod[1])&&(_stage == OFF_VAL))||(_stage == 1)){
+        if (_stages >= 1){
+          openToInc(1, _stageInc[1]);
+        }
+      }
+
+      if (((temp < targetTemp + _stageMod[1] - _hyst)&&(_stage == OFF_VAL))||(_stage == -1)){
+        if (_stages >= 1){
+          closeToInc(-1, 0);
+        }
+      }
+      else if (((temp < targetTemp + _stageMod[2] - _hyst)&&(_stage == OFF_VAL))||(_stage == -2)){
+        if (_stages >= 2){
+          closeToInc(-2, _stageInc[1]);
+        }
+      }
+      else if (((temp < targetTemp + _stageMod[3] - _hyst)&&(_stage == OFF_VAL))||(_stage == -3)){
+        if (_stages >= 3){
+          closeToInc(-3, _stageInc[2]);
+        }
+      }
+      else if (((temp < targetTemp + _stageMod[4] - _hyst)&&(_stage == OFF_VAL))||(_stage == -4)){
+        if (_stages >= 4){
+          closeToInc(-4, _stageInc[3]);
+        }
+      }
+    }
+    safetyCycle();
+  }
+}
+
+
+
+
+void Rollup::openToInc(byte stage, byte targetIncrement){
+
+  if (_incrementCounter == OFF_VAL){
+    _incrementCounter = 0;
+  }
+  if ((_opening == false)&&(_openingCycle == false)){
+    _move = targetIncrement - _incrementCounter;
+
+    if (_move > 0){
+      rollupTimer = 0;
+      _openingCycle = true;
+      _stage = stage;
+      startOpening();
+    }
+  }
+  if (_move > 0){
+    if(_openingCycle == true){
+
+      #ifdef DEBUG_ROLLUP_TIMING
+          Serial.println("-------------");
+          Serial.println("OPENING CYCLE");
+          Serial.print("Increment :     ");
+          Serial.println(_incrementCounter);
+          Serial.print("Target increment :     ");
+          Serial.println(targetIncrement);
+        	Serial.print("Timer :         ");
+        	Serial.println(rollupTimer);
+        	Serial.print("Rotation time : ");
+        	Serial.println((unsigned long)_rotationUp*1000/_increments*_move);
+        	Serial.print("Pause time :    ");
+        	Serial.println((unsigned long)_rotationUp*1000/_increments*_move+_pause*1000);
+            Serial.println("-------------");
+      #endif
+
+      if (rollupTimer >= ((unsigned long)_rotationUp*1000/_increments*_move)){
+        if(_opening == true){
+          _incrementCounter = _incrementCounter + _move;
+          stopOpening();
+          printPause();
+        }
+      }
+      if (rollupTimer >= ((unsigned long)_rotationUp*1000/_increments*_move + (unsigned long)_pause*1000)){
+        _openingCycle = false;
+        _stage = OFF_VAL;
+        printEndPause();
+      }
+    }
+  }
+}
+
+void Rollup::closeToInc(byte stage, byte targetIncrement){
+
+  if (_incrementCounter == OFF_VAL){
+    _incrementCounter = 0;
+  }
+
+  if ((_closing == false)&&(_closingCycle == false)){
+      _move = targetIncrement - _incrementCounter;
+      if (_move < 0){
+        rollupTimer = 0;
+        _closingCycle = true;
+        _stage = stage;
+        startClosing();
+      }
+  }
+  if (_move < 0){
+    if(_closingCycle == true){
+
+      #ifdef DEBUG_ROLLUP_TIMING
+        Serial.println("-------------");
+        Serial.println("CLOSING CYCLE");
+        Serial.print("Increment :     ");
+        Serial.println(_incrementCounter);
+        Serial.print("Target increment :     ");
+        Serial.println(targetIncrement);
+      	Serial.print("Timer :         ");
+      	Serial.println(rollupTimer);
+      	Serial.print("Rotation time : ");
+      	Serial.println((unsigned long)_rotationDown*1000/_increments*(0-_move));
+      	Serial.print("Pause time :    ");
+      	Serial.println((unsigned long)_rotationDown*1000/_increments*(0-_move)+(unsigned long)_pause*1000);
+          Serial.println("-------------");
+      #endif
+
+      if (rollupTimer >= ((unsigned long)_rotationDown*1000/_increments*(0-_move))){
+        if(_closing == true){
+          _incrementCounter = _incrementCounter + _move;
+          stopClosing();
+          printPause();
+        }
+      }
+      if (rollupTimer >= ((unsigned long)_rotationDown*1000/_increments*(0-_move) + (unsigned long)_pause*1000)){
+        _closingCycle = false;
+        _stage = OFF_VAL;
+        printEndPause();
+      }
+    }
+  }
+}
+
+void Rollup::safetyCycle(){
+  if(_safety == true){
+    if(_incrementCounter == _increments){
+      safetyOpen();
+    }
+    else if (_incrementCounter == 0){
+      safetyClose();
+    }
+  }
+}
+
+void Rollup::safetyOpen(){
+  if ((_safetyCycle == false)||(_stage != OFF_VAL)){
+    _safetyCycle = true;
+    safetyTimer = 0;
+  }
+  if(safetyTimer >= SAFETY_DELAY){
+    if(_opening == false){
+      desactivateRoutine();
+      startOpening();
+    }
+  }
+  if(safetyTimer >= SAFETY_DELAY+_rotationUp*1000){
+    if(_opening == true){
+      stopOpening();
+      activateRoutine();
+      _safetyCycle = false;
+    }
+  }
+}
+
+void Rollup::safetyClose(){
+  if ((_safetyCycle == false)||(_stage != OFF_VAL)){
+    _safetyCycle = true;
+    safetyTimer = 0;
+  }
+  if(safetyTimer >= SAFETY_DELAY){
+    if(_closing == false){
+      desactivateRoutine();
+      startClosing();
+    }
+  }
+  if(safetyTimer >= SAFETY_DELAY+_rotationDown*1000){
+    if(_closing == true){
+      stopClosing();
+      activateRoutine();
+      _safetyCycle = false;
+    }
+  }
+
+}
 /*
 Activate or desactivate the routine function
 */
@@ -283,129 +536,175 @@ Activate or desactivate the opening or closing relay
 
 void Rollup::startOpening(){
 	if(_closing == false){
-		_opening = true;		
-      digitalWrite(_openingPin, HIGH);
-      #ifdef DEBUG
-        Serial.println("opening");
-      #endif
+		_opening = true;
+    if(_relayType == ACT_HIGH){
+    	digitalWrite(_openingPin, HIGH);
+    }
+    else if (_relayType == ACT_LOW){
+    	digitalWrite(_openingPin, LOW);
+    }
+
+    #ifdef DEBUG_ROLLUP_TIMING
+      Serial.println("-------------");
+      Serial.println("opening");
+      Serial.println("-------------");
+    #endif
 	}
 }
 
 void Rollup::startClosing(){
 	if(_opening == false){
-		_closing = true;		
-      digitalWrite(_closingPin, HIGH);
-      #ifdef DEBUG
-        Serial.println("closing");
-      #endif
+		_closing = true;
+    if(_relayType == ACT_HIGH){
+    	digitalWrite(_closingPin, HIGH);
+    }
+    else if (_relayType == ACT_LOW){
+    	digitalWrite(_closingPin, LOW);
+    }
+    #ifdef DEBUG_ROLLUP_TIMING
+      Serial.println("-------------");
+      Serial.println("closing");
+      Serial.println("-------------");
+    #endif
 	}
 }
 
 void Rollup::stopOpening(){
-	_opening = false;
-	digitalWrite(_openingPin, LOW);					
-
+	if(_opening == true){
+		_opening = false;
+    if(_relayType == ACT_HIGH){
+    	digitalWrite(_openingPin, LOW);
+    }
+    else if (_relayType == ACT_LOW){
+    	digitalWrite(_openingPin, HIGH);
+    }
+    #ifdef DEBUG_ROLLUP_TIMING
+      Serial.println("-------------");
+      Serial.println("stop opening");
+      Serial.println("-------------");
+    #endif
+	}
 }
 
 void Rollup::stopClosing(){
-	_closing = false;
-	digitalWrite(_openingPin, LOW);						
-
+	if(_closing == true){
+		_closing = false;
+    if(_relayType == ACT_HIGH){
+    	digitalWrite(_closingPin, LOW);
+    }
+    else if (_relayType == ACT_LOW){
+    	digitalWrite(_closingPin, HIGH);
+    }
+    #ifdef DEBUG_ROLLUP_TIMING
+      Serial.println("-------------");
+      Serial.println("stop closing");
+      Serial.println("-------------");
+    #endif
+	}
 }
 /*
 Open or close the rollups by one increment
 */
 void Rollup::openSides(){
-  if (_incrementCounter == 100){
+	#ifdef DEBUG_ROLLUP_TIMING
+  if(_openingCycle == true){
+    Serial.println("-------------");
+    Serial.println("OPENING CYCLE");
+  	Serial.print("Timer :         ");
+  	Serial.println(rollupTimer);
+  	Serial.print("Rotation time : ");
+  	Serial.println(((unsigned long)_rotationUp*1000/_increments));
+  	Serial.print("Pause time :    ");
+  	Serial.println(((unsigned long)_rotationUp*1000/_increments+(unsigned long)_pause*1000));
+    Serial.print("Increment :     ");
+    Serial.println(_incrementCounter);
+      Serial.println("-------------");
+  }
+	#endif
+
+  if (_incrementCounter == OFF_VAL){
     _incrementCounter = 0;
-    _lastAction = OPEN;
   }
-  if(_lastAction == CLOSE){
-	 _incrementCounter = 0;  
-    _lastAction = OPEN;
-  }
-  
-  if (_incrementCounter < _increments) {
-    
+
+  if ((_incrementCounter < _increments)||(_openingCycle == true)) {
     if ((_opening == false) && (_openingCycle == false)){		//Si le rollup était précédemment inactif et qu'aucune cycle d'ouverture n'est en cours
     	rollupTimer = 0;														//On initie le compteur
-    	_openingCycle == true;												//Un cycle est en cours
+    	_openingCycle = true;												//Un cycle est en cours
     	startOpening();														//On active le relais d'ouverture
-    	_incrementCounter += 1;												//L'incrément augmente de +1
     }
-    
-    if(rollupTimer >= (_rotationUp/_increments)){					//Si le compteur atteint le temps d'ouverture/le nombre d'incréments...
-    	stopOpening();															//On désactive le relais
+  }
+
+  if(_openingCycle == true){
+    if(rollupTimer >= (((unsigned long)_rotationUp*1000/_increments))){					//Si le compteur atteint le temps d'ouverture/le nombre d'incréments...
+      if(_opening == true){
+        _incrementCounter += 1;												//L'incrément augmente de +1
+        stopOpening();															//On désactive le relais
+        printPause();
+      }
     }
-    if(rollupTimer >= (_rotationUp/_increments + _pause)){		//Après le temps de pause...
-    	_openingCycle == false;												//On peut recommencer le cycle
+    if(rollupTimer >= ((unsigned long)_rotationUp*1000/_increments + (unsigned long)_pause*1000)){		//Après le temps de pause...
+    	_openingCycle = false;												//On peut recommencer le cycle
+      printEndPause();
     }
-    
   }
 }
+
 
 void Rollup::closingSides(){
-  if (_incrementCounter == 100){
-    _incrementCounter = _increments;
-    _lastAction = CLOSE;
+	#ifdef DEBUG_ROLLUP_TIMING
+  if(_closingCycle == true){
+    Serial.println("-------------");
+    Serial.println("ClOSING CYCLE");
+  	Serial.println("Timer :         ");
+  	Serial.println(rollupTimer);
+  	Serial.println("Rotation time : ");
+  	Serial.println(((unsigned long)_rotationDown*1000/_increments));
+  	Serial.println("Pause time : ");
+  	Serial.println(((unsigned long)_rotationDown*1000/_increments+(unsigned long)_pause*1000));
+    Serial.print("Increment :       ");
+    Serial.println(_incrementCounter);
+    Serial.println("-------------");
   }
-  if(_lastAction == OPEN){
-	 _incrementCounter = _increments;  
-    _lastAction = CLOSE;
-  }
-  
-  if (_incrementCounter < _increments) {
-    
-    if ((_closing == false) && (_closingCycle == false)){		//Si le rollup était précédemment inactif et qu'aucune cycle de fermeture n'est en cours
-    	rollupTimer = 0;			//On initie le compteur
-    	_closingCycle == true;			//Un cycle est en cours
-    	startClosing();			//On active le relais d'ouverture
-    	_incrementCounter += 1;	//L'incrément augmente de +1
-    }
-    
-    if(rollupTimer >= (_rotationDown/_increments)){		//Si le compteur atteint le temps d'ouverture/le nombre d'incréments...
-    	stopClosing();												//On désactive le relais
-    }
-    if(rollupTimer >= (_rotationDown/_increments + _pause)){	//Après le temps de pause...
-    	_closingCycle == false;										//On peut recommencer le cycle
-    }
-    
-  }
-}
-/*
-Open or close the rollups to the maximum or minimum increment
-*/
-void Rollup::openCompletely(){
-  if (_incrementCounter == 100){
-    _incrementCounter = 0;
-    _lastAction = OPEN;
-  }
-  #ifdef DEBUG_ROLLUP
-  Serial.println("opening");
   #endif
-  digitalWrite(_openingPin, HIGH);
-  for(byte x = 0; x < _rotationUp; x--)
-  {
-    delay(1000);
+  if (_incrementCounter == OFF_VAL){
+    _incrementCounter = _increments;
   }
-  _incrementCounter = _increments;
-  digitalWrite(_openingPin, LOW);
+
+  if (_incrementCounter > 0) {
+    if ((_closing == false) && (_closingCycle == false)){		//Si le rollup était précédemment inactif et qu'aucune cycle d'ouverture n'est en cours
+    	rollupTimer = 0;														//On initie le compteur
+    	_closingCycle = true;												//Un cycle est en cours
+    	startClosing();														//On active le relais d'ouverture
+    }
+  }
+  if(_closingCycle == true){
+    if(rollupTimer >= ((unsigned long)_rotationDown*1000/_increments)){					//Si le compteur atteint le temps d'ouverture/le nombre d'incréments...
+      if(_opening == true){
+        _incrementCounter -= 1;												//L'incrément augmente de +1
+        stopClosing();															//On désactive le relais
+        printPause();
+      }
+    }
+    if(rollupTimer >= ((unsigned long)_rotationDown*1000/_increments + (unsigned long)_pause*1000)){		//Après le temps de pause...
+    	_closingCycle = false;												//On peut recommencer le cycle
+      printEndPause();
+    }
+  }
 }
 
-void Rollup::closeCompletely(){
-  if (_incrementCounter == 100){
-    _incrementCounter = _increments;
-  }
-  #ifdef DEBUG_ROLLUP
-  Serial.println("closing");
+void Rollup::printPause(){
+  #ifdef DEBUG_ROLLUP_TIMING
+    Serial.println("-------------");
+    Serial.println("start pause");
+    Serial.println("-------------");
   #endif
-  digitalWrite(_closingPin, HIGH);
-  for(byte x = 0; x < _rotationDown; x--)
-  {
-    delay(1000);
-  }
-  _incrementCounter = 0;
-  digitalWrite(_closingPin, LOW);
+}
+void Rollup::printEndPause(){
+  #ifdef DEBUG_ROLLUP_TIMING
+    Serial.println("-------------");
+    Serial.println("end of the pause");
+    Serial.println("-------------");
+  #endif
 }
 /*
 Program all parameters all at once...
@@ -423,14 +722,7 @@ void Rollup::setParameters(float rTemp, float rHyst, unsigned short rotationUp, 
 Or one by one...
 */
 void Rollup::setTemp(float temp){
-    switch (_mode){
-      case FIX_TEMP:
-        _tempParameter = temp;
-      break;
-      case VAR_TEMP:
-        _tempParameter = temp-10;
-      break;
-    }
+  _tempParameter = temp;
 }
 
 void Rollup::setHyst(float rHyst){
@@ -521,12 +813,18 @@ void Rollup::setSafetyInEEPROM(boolean safety){
 EEPROM.update(_localIndex+SAFETY_INDEX, safety);
 }
 
-static const unsigned long Rollup::_interval = 10000;
 
 void Rollup::EEPROMUpdate(){
-  unsigned long currentMillis = millis();
-  if (currentMillis - _previousMillis >= _interval) {
-    _previousMillis = currentMillis;
+	Serial.println("EEPROM TIMER : ");
+	Serial.println(EEPROMTimer);
+  	 #ifdef DEBUG_EEPROM
+  	 Serial.prinln(EEPROMTimer);
+  	 #endif
+  if (EEPROMTimer > 10000) {
+  	 #ifdef DEBUG_EEPROM
+  	 Serial.prinln("Rollup parameters saved in EEPROM");
+  	 #endif
+    EEPROMTimer = 0;
 
     switch (_mode){
       case FIX_TEMP:
@@ -543,22 +841,22 @@ void Rollup::EEPROMUpdate(){
     }
 
 
-    if (_hyst != (float)EEPROM.read(_localIndex+1)){
+    if (_hyst != (float)EEPROM.read(_localIndex+TEMP_INDEX)){
       setHystInEEPROM(_hyst);
     }
-    if (_rotationUp != (unsigned short)EEPROM.read(_localIndex+2)){
+    if (_rotationUp != (unsigned short)EEPROM.read(_localIndex+ROTATION_UP_INDEX)){
       setRotationUpInEEPROM(_rotationUp);
     }
-    if (_rotationDown != (unsigned short)EEPROM.read(_localIndex+3)){
+    if (_rotationDown != (unsigned short)EEPROM.read(_localIndex+ROTATION_DOWN_INDEX)){
       setRotationDownInEEPROM(_rotationDown);
     }
-    if (_increments != (unsigned short)EEPROM.read(_localIndex+4)){
+    if (_increments != (unsigned short)EEPROM.read(_localIndex+INCREMENTS_INDEX)){
       setIncrementsInEEPROM(_increments);
     }
-    if (_pause != (unsigned short)EEPROM.read(_localIndex+5)){
+    if (_pause != (unsigned short)EEPROM.read(_localIndex+PAUSE_INDEX)){
       setPauseInEEPROM(_pause);
     }
-    if (_safety != (boolean)EEPROM.read(_localIndex+6)){
+    if (_safety != (boolean)EEPROM.read(_localIndex+SAFETY_INDEX)){
       setSafetyInEEPROM(_safety);
     }
   }
@@ -569,39 +867,65 @@ void Rollup::EEPROMUpdate(){
 //****************************************************************
 
 Fan::Fan(){
-    _active = true;
+
+  	 _debug = false;
+  	 _routine = true;
     _localIndex = FAN_INDEX + _index;
     _index += 3;
+  	 EEPROMTimer = 0;
 }
 
 static unsigned short Fan::_index = 0;
 
 Fan::~Fan(){}
 
-void Fan::initOutput(byte pin){
+void Fan::initOutput(byte mode, byte pin){
     pinMode(pin, OUTPUT);
     digitalWrite(pin, LOW);
     _pin = pin;
+	 _mode = mode;
  }
 
 //action functions
+/*
+Start or stop the fan when a certain temperature, defined within the class itself, is reached
+(Mode FIX_TEMP)
+*/
 void Fan::routine(float temp){
-  if (_active == true){
-    if (temp < (_tempParameter - _hyst)) {
-      if(digitalRead(_pin) == HIGH){
-        digitalWrite(_pin, LOW);
-        Serial.println("Fan : off");
-      }
-    }
-    else if (temp > _tempParameter) {
-      if(digitalRead(_pin) == LOW){
-        digitalWrite(_pin, HIGH);
-        Serial.println("Fan : on");
+  if (_mode == FIX_TEMP){
+  	 if(_routine == true){
+      if (temp < (_tempParameter - _hyst)) {
+        	stop();
+      } else if (temp > _tempParameter) {
+        	start();
       }
     }
   }
-}
 
+  else{
+    _debug = true;
+  }
+}
+/*
+Start or stop the fan when a certain temperature is reached
+Adjust to an external target temperature (Mode VAR_TEMP)
+*/
+void Fan::routine(float target, float temp){
+  if (_mode == VAR_TEMP){
+  	 if(_routine == true){
+      float activationTemp = target + _tempParameter;
+      if (temp < (activationTemp - _hyst)) {
+        	stop();
+      } else if (temp > activationTemp) {
+        	start();
+      }
+    }
+  }
+
+  else{
+    _debug = true;
+  }
+}
 void Fan::stop(){
   if(digitalRead(_pin) == HIGH){
     digitalWrite(_pin, LOW);
@@ -612,24 +936,24 @@ void Fan::stop(){
 void Fan::start(){
   if(digitalRead(_pin) == LOW){
     digitalWrite(_pin, HIGH);
-    Serial.println("Fan : off");
+    Serial.println("Fan : on");
   }
 }
 /*
 Activate or desactivate the routine function
 */
-void Fan::desactivate(){
-  _active = false;
+void Fan::desactivateRoutine(){
+  _routine = false;
 }
-void Fan::activate(){
-  _active = true;
+void Fan::activateRoutine(){
+  _routine = true;
 }
 
 //programmation functions
 
-void Fan::setParameters(float activationTemp, float hyst, boolean safety){
+void Fan::setParameters(float temp, float hyst, boolean safety){
   setHyst(hyst);
-  setTemp(activationTemp);
+  setTemp(temp);
   setSafety(safety);
 }
 /*
@@ -640,7 +964,14 @@ void Fan::setHyst(float hyst){
 }
 
 void Fan::setTemp(float temp){
-  _tempParameter = temp;
+    switch (_mode){
+      case FIX_TEMP:
+        _tempParameter = temp;
+      break;
+      case VAR_TEMP:
+        _tempParameter = temp-10;
+      break;
+    }
 }
 
 void Fan::setSafety(boolean safety){
@@ -661,8 +992,16 @@ void Fan::loadEEPROMParameters(){
   setSafety((boolean)EEPROM.read(_localIndex+SAFETY_INDEX));
 }
 
-void Fan::setTempInEEPROM(byte temp){
-    EEPROM.update(_localIndex+TEMP_INDEX, temp);
+void Fan::setTempInEEPROM(unsigned short temp){
+    switch (_mode){
+      case FIX_TEMP:
+          EEPROM.update(_localIndex+TEMP_INDEX, temp);
+      break;
+      case VAR_TEMP:
+          unsigned short adjustTemp = temp+10;
+          EEPROM.update(_localIndex+TEMP_INDEX, (byte)adjustTemp);
+      break;
+    }
 }
 
 void Fan::setHystInEEPROM(byte hyst){
@@ -671,15 +1010,42 @@ EEPROM.update(_localIndex+HYST_INDEX, hyst);
 void Fan::setSafetyInEEPROM(boolean safety){
 EEPROM.update(_localIndex+SAFETY_INDEX, safety);
 }
+void Fan::EEPROMUpdate(){
+  if (EEPROMTimer > 10000) {
+    EEPROMTimer = 0;
 
+    switch (_mode){
+      case FIX_TEMP:
+        if (_tempParameter != (float)EEPROM.read(_localIndex+TEMP_INDEX)){
+          setTempInEEPROM(_tempParameter);
+        }
+      break;
+      case VAR_TEMP:
+        if (_tempParameter != (float)EEPROM.read(_localIndex+TEMP_INDEX)-10){
+          unsigned short adjustTempParameter = _tempParameter+10;
+          setTempInEEPROM((byte) adjustTempParameter);
+        }
+      break;
+    }
+
+    if (_hyst != (float)EEPROM.read(_localIndex+HYST_INDEX)){
+      setHystInEEPROM(_hyst);
+    }
+    if (_safety != (boolean)EEPROM.read(_localIndex+SAFETY_INDEX)){
+      setSafetyInEEPROM(_safety);
+    }
+ }
+}
 //****************************************************************
 //******************HEATER FUNCTIONS************************
 //****************************************************************
 
 Heater::Heater(){
-    _active = true;
+	 _debug = false;
+    _routine = true;
     _localIndex = HEATER_INDEX + _index;
     _index += 3;
+    EEPROMTimer = 0;
 }
 
 static unsigned short Heater::_index = 0;
@@ -687,30 +1053,53 @@ static unsigned short Heater::_index = 0;
 Heater::~Heater(){}
 
 
-void Heater::initOutput(byte pin){
+void Heater::initOutput(byte mode, byte pin){
     pinMode(pin, OUTPUT);
     digitalWrite(pin, LOW);
     _pin = pin;
+    _mode = mode;
  }
- 
+
 //action functions
+/*
+Start or stop the heater when a certain temperature, defined within the class itself, is reached
+(Mode FIX_TEMP)
+*/
 void Heater::routine(float temp){
-  if (_active == true){
-    if (temp > (_tempParameter + _hyst)) {
-      if(digitalRead(_pin) == HIGH){
-        digitalWrite(_pin, LOW);
-        Serial.println("Heater : off");
-      }
-    }
-    else if (temp < _tempParameter) {
-      if(digitalRead(_pin) == LOW){
-        digitalWrite(_pin, HIGH);
-        Serial.println("Heater : on");
+  if (_mode == FIX_TEMP){
+  	 if(_routine == true){
+      if (temp > (_tempParameter + _hyst)) {
+        	stop();
+      } else if (temp < _tempParameter) {
+        	start();
       }
     }
   }
-}
 
+  else{
+    _debug = true;
+  }
+}
+/*
+Start or stop the heater when a certain temperature is reached
+Adjust to an external target temperature (Mode VAR_TEMP)
+*/
+void Heater::routine(float target, float temp){
+  if (_mode == VAR_TEMP){
+  	 if(_routine == true){
+      float activationTemp = target + _tempParameter;
+      if (temp > (activationTemp + _hyst)) {
+        	stop();
+      } else if (temp < activationTemp) {
+        	start();
+      }
+    }
+  }
+
+  else{
+    _debug = true;
+  }
+}
 void Heater::stop(){
   if(digitalRead(_pin) == HIGH){
     digitalWrite(_pin, LOW);
@@ -721,27 +1110,27 @@ void Heater::stop(){
 void Heater::start(){
   if(digitalRead(_pin) == LOW){
     digitalWrite(_pin, HIGH);
-    Serial.println("Heater : off");
+    Serial.println("Heater : on");
   }
 }
 /*
 Activate or desactivate the routine function
 */
-void Heater::desactivate(){
-  _active = false;
+void Heater::desactivateRoutine(){
+  _routine = false;
 }
-void Heater::activate(){
-  _active = true;
+void Heater::activateRoutine(){
+  _routine = true;
 }
 
 //programmation functions
 
-void Heater::setParameters(float activationTemp, float hyst, boolean safety){
+
+void Heater::setParameters(float temp, float hyst, boolean safety){
   setHyst(hyst);
-  setTemp(activationTemp);
+  setTemp(temp);
   setSafety(safety);
 }
-
 /*
 Or one by one...
 */
@@ -750,7 +1139,14 @@ void Heater::setHyst(float hyst){
 }
 
 void Heater::setTemp(float temp){
-  _tempParameter = temp;
+    switch (_mode){
+      case FIX_TEMP:
+        _tempParameter = temp;
+      break;
+      case VAR_TEMP:
+        _tempParameter = temp-10;
+      break;
+    }
 }
 
 void Heater::setSafety(boolean safety){
@@ -771,12 +1167,47 @@ void Heater::loadEEPROMParameters(){
   setSafety((boolean)EEPROM.read(_localIndex+SAFETY_INDEX));
 }
 
-void Heater::setTempInEEPROM(byte temp){
-    EEPROM.update(_localIndex+TEMP_INDEX, temp);
+void Heater::setTempInEEPROM(unsigned short temp){
+    switch (_mode){
+      case FIX_TEMP:
+          EEPROM.update(_localIndex+TEMP_INDEX, temp);
+      break;
+      case VAR_TEMP:
+          unsigned short adjustTemp = temp+10;
+          EEPROM.update(_localIndex+TEMP_INDEX, (byte)adjustTemp);
+      break;
+    }
 }
+
 void Heater::setHystInEEPROM(byte hyst){
 EEPROM.update(_localIndex+HYST_INDEX, hyst);
 }
 void Heater::setSafetyInEEPROM(boolean safety){
 EEPROM.update(_localIndex+SAFETY_INDEX, safety);
+}
+void Heater::EEPROMUpdate(){
+  if (EEPROMTimer > 10000) {
+    EEPROMTimer = 0;
+
+    switch (_mode){
+      case FIX_TEMP:
+        if (_tempParameter != (float)EEPROM.read(_localIndex+TEMP_INDEX)){
+          setTempInEEPROM(_tempParameter);
+        }
+      break;
+      case VAR_TEMP:
+        if (_tempParameter != (float)EEPROM.read(_localIndex+TEMP_INDEX)-10){
+          unsigned short adjustTempParameter = _tempParameter+10;
+          setTempInEEPROM((byte) adjustTempParameter);
+        }
+      break;
+    }
+
+    if (_hyst != (float)EEPROM.read(_localIndex+HYST_INDEX)){
+      setHystInEEPROM(_hyst);
+    }
+    if (_safety != (boolean)EEPROM.read(_localIndex+SAFETY_INDEX)){
+      setSafetyInEEPROM(_safety);
+    }
+ }
 }
