@@ -1,3 +1,4 @@
+
 //Libraries
 #include "Arduino.h"
 #include "GreenhouseLib.h"
@@ -16,20 +17,22 @@ DallasTemperature sensors(&oneWire);
 float greenhouseTemperature;  //store temperature value
 
 //Declaring rollup object
-Rollup rollup1; //Pin 6 => opening relay; pin 7 => closing relay
+Rollup rollup1;
 
 void setup() {
+  Serial.begin(9600);
   sensors.begin();  //start communication with temp probe
-  rollup1.initOutputs(FIX_TEMP, OPENING_PIN, CLOSING_PIN);
+  rollup1.initOutputs(FIX_TEMP, ACT_HIGH, OPENING_PIN, CLOSING_PIN);
   rollup1.setParameters(23, 1, 25, 25, 5, 5, true); //Set parameters as follow...
 
     //Activation temperature : 23C
-    //hysteresis : 1C
-    //Rotation time (Up): 25 sec
-    //Rotation time (Down): 25 sec
+    //hysteresis : 1C (open at : activationTemp ; close at : activationTemp-hyst)
+    //Rotation time (Up): 25 sec (for full opening) (0 to 255 seconds)
+    //Rotation time (Down): 25 sec (for full closing) (0 to 255 seconds)
     //Increments : 5
-    //Pause between rotation : 5
-    //Safety mode : ON
+    //Pause between increments : 5 (0 to 255 seconds)
+    //Safety mode : ON (safety opening cycle every 30 min even if considered fully open)
+
 
 }
 
