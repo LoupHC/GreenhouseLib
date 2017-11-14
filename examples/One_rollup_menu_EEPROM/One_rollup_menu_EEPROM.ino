@@ -1,3 +1,5 @@
+//Hardware for this demo includes DFrobot LCD shield, a DS18B20 temp probe and a single on/off button
+
 //Uncomment to enable serial communication
 //#define DEBUG_OVERVIEW
 //#define DEBUG_ROLLUP
