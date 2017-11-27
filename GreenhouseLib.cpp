@@ -1,14 +1,8 @@
-// Created by Loup Hébert-Chartrand on 12/06/17.
-// Copyright 2017 - Under creative commons license
-//
-// This software is furnished "as is", without technical support, and with no
-// warranty, express or implied, as to its usefulness for any purpose.
-
 #include "Arduino.h"
 #include "GreenhouseLib.h"
 
-Greenhouse::Greenhouse(int timezone, float latitude, float longitude, byte timezones, byte rollups, byte fans, byte heaters){
-  _timezones = timezones;
+Greenhouse::Greenhouse(int timezone, float latitude, float longitude, byte timepoints, byte rollups, byte fans, byte heaters){
+  _timepoints = timepoints;
   _rollups = rollups;
   _fans = fans;
   _heaters = heaters;
@@ -118,32 +112,32 @@ void Greenhouse::selectActualProgram(){
       Serial.println("----");
       Serial.print ("Heure actuelle ");Serial.print(" : ");Serial.print(_rightNow[HEURE] );Serial.print(" : ");Serial.println(_rightNow[MINUTE]);
     #endif
-    for (byte y = 0; y < (_timezones-1); y++){
+    for (byte y = 0; y < (_timepoints-1); y++){
 
     #ifdef DEBUG_PROGRAM
       Serial.print ("Programme "); Serial.print(y+1);Serial.print(" : ");Serial.print(P[y][HEURE]);Serial.print(" : ");Serial.println(P[y][MINUTE]);
     #endif
-      if (((_rightNow[HEURE] == timezone[y].hr())  && (_rightNow[MINUTE] >= timezone[y].mn()))||((_rightNow[HEURE] > timezone[y].hr()) && (_rightNow[HEURE] < timezone[y+1].hr()))||((_rightNow[HEURE] == timezone[y+1].hr())  && (_rightNow[MINUTE] <timezone[y+1].mn()))){
-          _program = y+1;
+      if (((_rightNow[HEURE] == timepoint[y].hr())  && (_rightNow[MINUTE] >= timepoint[y].mn()))||((_rightNow[HEURE] > timepoint[y].hr()) && (_rightNow[HEURE] < timepoint[y+1].hr()))||((_rightNow[HEURE] == timepoint[y+1].hr())  && (_rightNow[MINUTE] <timepoint[y+1].mn()))){
+          _timepoint = y+1;
         }
     }
 
     #ifdef DEBUG_PROGRAM
-      Serial.print ("Programme ");Serial.print(_timezones);Serial.print(" : ");Serial.print(P[_timezones-1][HEURE]);Serial.print(" : ");Serial.println(P[_timezones-1][MINUTE]);
+      Serial.print ("Programme ");Serial.print(_timepoints);Serial.print(" : ");Serial.print(P[_timepoints-1][HEURE]);Serial.print(" : ");Serial.println(P[_timepoints-1][MINUTE]);
     #endif
 
-    if (((_rightNow[HEURE] == timezone[_timezones-1].hr())  && (_rightNow[MINUTE] >= timezone[_timezones-1].mn()))||(_rightNow[HEURE] > timezone[_timezones-1].hr())||(_rightNow[HEURE] < timezone[0].hr())||((_rightNow[HEURE] == timezone[0].hr())  && (_rightNow[MINUTE] < timezone[0].mn()))){
-      _program = _timezones;
+    if (((_rightNow[HEURE] == timepoint[_timepoints-1].hr())  && (_rightNow[MINUTE] >= timepoint[_timepoints-1].mn()))||(_rightNow[HEURE] > timepoint[_timepoints-1].hr())||(_rightNow[HEURE] < timepoint[0].hr())||((_rightNow[HEURE] == timepoint[0].hr())  && (_rightNow[MINUTE] < timepoint[0].mn()))){
+      _timepoint = _timepoints;
     }
     #ifdef DEBUG_PROGRAM
       Serial.print ("Program is : ");
-      Serial.println(_program);
+      Serial.println(_timepoint);
     #endif
 }
 
 void Greenhouse::setTempCible(){
-  _coolingTemp = timezone[_program-1].coolingTemp();
-  _heatingTemp = timezone[_program-1].heatingTemp();
+  _coolingTemp = timepoint[_timepoint-1].coolingTemp();
+  _heatingTemp = timepoint[_timepoint-1].heatingTemp();
 }
 
 void Greenhouse::startRamping(){
@@ -151,8 +145,8 @@ void Greenhouse::startRamping(){
   float newHeatingTemp;
   float newCoolingTemp;
 
-  newHeatingTemp = timezone[_program-1].heatingTemp();
-  newCoolingTemp = timezone[_program-1].coolingTemp();
+  newHeatingTemp = timepoint[_timepoint-1].heatingTemp();
+  newCoolingTemp = timepoint[_timepoint-1].coolingTemp();
   if (ramping > _ramping){
     if (newCoolingTemp > _coolingTemp){
       _coolingTemp += 0.5;
