@@ -7,31 +7,25 @@
 #ifndef GreenhouseLib_h
 #define GreenhouseLib_h
 
-/*
-A Greenhouse object inputs two parameters, a time array (sec, min, hour, date, month, year) and a temperature value and output multiple controle actions over
-rollup motors, fans and furnace. 
-To work nicely, parameters for each timepoints and outputs must be initialized in the setup part of an arduino sketch. 
-It calculates sunrise and sunset from geographical positions, and adjusts target temperature according to timepoints. 
-*/
+#define MAX_TIMEPOINTS 5
+#define MAX_ROLLUPS 2
+#define MAX_FANS 2
+#define MAX_HEATERS 2
 
 class Greenhouse
 {
   public:
     Greenhouse(int timezone, float latitude, float longitude, byte timezones, byte rollups, byte fans, byte heaters);
     ~Greenhouse();
-    //when are we? (automatic hour-saving adjustment, input winter time array)
     void setNow(byte rightNow[6]);
-    //define sunrise, sunset
     void solarCalculations();
-    //set actual time and cooling/heating temperatures
     void startingParameters();
 
-    //Objects instances
     TimeLord myLord;
-    Timezone timezone[5];
-    Rollup rollup[2];
-    Fan fan[2];
-    Heater heater[2];
+    Timpoint timepoint[MAX_TIMPOINTS];
+    Rollup rollup[MAX_ROLLUPS];
+    Fan fan[MAX_FANS];
+    Heater heater[MAX_HEATERS];
   
     //Confirm timepoint, cooling/heating temperatures, routine for each outputs
     void fullRoutine(byte rightNow[6], float greenhouseTemperature);
