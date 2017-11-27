@@ -1,12 +1,12 @@
 #include "Arduino.h"
 #include "GreenhouseLib.h"
 
-Greenhouse::Greenhouse(int timezone, float latitude, float longitude, byte timepoints, byte rollups, byte fans, byte heaters){
+Greenhouse::Greenhouse(int timeZone, float latitude, float longitude, byte timepoints, byte rollups, byte fans, byte heaters){
   _timepoints = timepoints;
   _rollups = rollups;
   _fans = fans;
   _heaters = heaters;
-  _timezone = timezone;
+  _timeZone = timeZone;
   _latitude = latitude;
   _longitude = longitude;
   _ramping = 300000;
@@ -57,14 +57,14 @@ void Greenhouse::EEPROMUpdate(){
 }
 
 void Greenhouse::solarCalculations(){
-  initTimeLord(_timezone, _latitude, _longitude);
+  initTimeLord(_timeZone, _latitude, _longitude);
   //Première lecture d'horloge pour définir le lever et coucher du soleil
   setSunrise();
   setSunset();
 }
 
-void Greenhouse::initTimeLord(int timezone, float latitude, float longitude){
-  myLord.TimeZone(timezone * 60);
+void Greenhouse::initTimeLord(int timeZone, float latitude, float longitude){
+  myLord.TimeZone(timeZone * 60);
   myLord.Position(latitude, longitude);
   myLord.DstRules(3,2,11,1,60); // DST Rules for USA
 }
@@ -91,9 +91,8 @@ void Greenhouse::setSunset(){
       _sunTime[x] = _rightNow[x];
   }
   myLord.SunSet(_sunTime); // Computes Sun Set. Prints:
-  myLord.DST(_sunTime);
-  Timezone::sunSet[HEURE] = (short)_sunTime[HEURE];
-  Timezone::sunSet[MINUTE] = (short)_sunTime[MINUTE];
+  Timepoint::sunSet[HEURE] = (short)_sunTime[HEURE];
+  Timepoint::sunSet[MINUTE] = (short)_sunTime[MINUTE];
   #ifdef DEBUG_SOLARCALC
     Serial.print("coucher du soleil :");  Serial.print(Timezone::sunSet[HEURE]);  Serial.print(":");  Serial.println(Timezone::sunSet[MINUTE]);
   #endif
