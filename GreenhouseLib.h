@@ -7,6 +7,7 @@
 #ifndef GreenhouseLib_h
 #define GreenhouseLib_h
 
+//Don't change these values unless you know what you are doing:
 #define MAX_TIMEPOINTS 5
 #define MAX_ROLLUPS 2
 #define MAX_FANS 2
