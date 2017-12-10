@@ -10,51 +10,15 @@
 #include "Arduino.h"
 #include "EEPROM.h"
 #include "elapsedMillis.h"
+#include "Parameters.h"
+#include "Defines.h"
+
 
 #ifndef GreenhouseLib_timing_h
 #define GreenhouseLib_timing_h
 
 
-#define TIMEZONE_INDEX 0
-#define ROLLUP_INDEX 50
-#define FAN_INDEX 80
-#define HEATER_INDEX 100
 
-#define TYPE_INDEX 0
-#define MOD_INDEX 1
-#define HOUR_INDEX 2
-#define MIN_INDEX 3
-#define HEAT_INDEX 4
-#define COOL_INDEX 5
-
-#define TEMP_INDEX 0
-#define HYST_INDEX 1
-#define SAFETY_INDEX 2
-#define ROTATION_UP_INDEX 3
-#define ROTATION_DOWN_INDEX 4
-#define INCREMENTS_INDEX 5
-#define PAUSE_INDEX 6
-
-#define VAR_TEMP 0
-#define FIX_TEMP 1
-#define MAN_TEMP 2
-
-#define HEURE 2
-#define MINUTE 1
-#define SR 0
-#define CLOCK 1
-#define SS 2
-
-#define CLOSE LOW
-#define OPEN HIGH
-#define ON HIGH
-#define OFF LOW
-
-#define ACT_HIGH 1
-#define ACT_LOW 0
-
-#define OFF_VAL 255
-#define SAFETY_DELAY 1800000
 /*
 //A counting template...
 
@@ -125,7 +89,7 @@ class Override
    	static const unsigned long _interval;
 };*/
 /*
-OBJECT : Timezone
+OBJECT : Timepoint
 Start time can be relative to sunrise or sunset (must be define in the main), or set manually
 Parameters :
 - type(SR, SS, CLOCK)
@@ -134,35 +98,30 @@ Parameters :
 - targetTemp (temperature to reach during this timezone)
 */
 
-class Timezone
+class Timepoint
 {
 	public:
 
-		Timezone();
-    ~Timezone();
-		void setParameters(byte type, short mod, float heatingTemp, float coolingTemp);
-		void setParameters(byte type, byte hour, byte min, float heatingTemp, float coolingTemp);
+		Timepoint();
+    ~Timepoint();
+		void setParameters(byte type, short hour, short min, float heatingTemp, float coolingTemp);
 		void setTime(short mod);
-		void setTime(byte hour, byte min);
+		void setTime(short hour, short min);
 		void setHeatTemp(float heatingTemp);
 		void setCoolTemp(float coolingTemp);
 		void setType(byte type);
-		void setMod(short mod);
-
+/*
 		void loadEEPROMParameters();
-		void setParametersInEEPROM(byte type, short mod, float heatingTemp, float coolingTemp);
-		void setParametersInEEPROM(byte type, byte hour, byte min, float heatingTemp, float coolingTemp);
-		void setTimeInEEPROM(byte type, short mod);
-		void setTimeInEEPROM(byte type, byte hour, byte min);
+		void setParametersInEEPROM(byte type, short hour, short min, float heatingTemp, float coolingTemp);
+		void setTimeInEEPROM(byte type, short hour, short min);
 		void setHeatTempInEEPROM(float heatingTemp);
 		void setCoolTempInEEPROM(float coolingTemp);
 		void setTypeInEEPROM(byte type);
 		void setModInEEPROM(short mod);
 
-
    	void EEPROMUpdate();
-
- 		unsigned short hr();
+*/
+		unsigned short hr();
  		unsigned short mn();
  		float heatingTemp();
  		float coolingTemp();
@@ -173,21 +132,17 @@ class Timezone
 
 	private:
 
-		unsigned short _type;
-		short _mod;
-		unsigned short _hour;
-		unsigned short _min;
-		float _heatingTemp;
-		float _coolingTemp;
+		byteParameter _type;
+		shortParameter _hr;
+		shortParameter _mn;
+		floatParameter _heatingTemp;
+		floatParameter _coolingTemp;
+
   	unsigned short _localIndex;
   	static unsigned short _index;
 		elapsedMillis EEPROMTimer;
 };
 
 
-//Generic macros
-byte negativeToByte(int data, byte mod);
-int byteToNegative(int data, byte mod);
-void convertDecimalToTime(int * heure, int * minut);
 
 #endif

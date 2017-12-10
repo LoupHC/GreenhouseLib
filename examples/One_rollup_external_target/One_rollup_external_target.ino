@@ -1,6 +1,6 @@
 //Libraries
 #include "Arduino.h"
-#include "GreenhouseLib.h"
+#include "GreenhouseLib_rollups.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -24,6 +24,7 @@ Rollup rollup1;
 void setup() {
   Serial.begin(9600);
   sensors.begin();  //start communication with temp probe
+  rollup1.initRollup(0);
   rollup1.initOutputs(VAR_TEMP, ACT_HIGH, OPENING_PIN, CLOSING_PIN);
   rollup1.setParameters(-1, 1, 25, 25, 5, 5, true); //Set parameters as follow...
 

@@ -1,7 +1,7 @@
 
 //Libraries
 #include "Arduino.h"
-#include "GreenhouseLib.h"
+#include "GreenhouseLib_rollups.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -22,6 +22,7 @@ Rollup rollup1;
 void setup() {
   Serial.begin(9600);
   sensors.begin();  //start communication with temp probe
+  rollup1.initRollup(0);
   rollup1.initOutputs(FIX_TEMP, ACT_HIGH, OPENING_PIN, CLOSING_PIN);
   rollup1.setParameters(23, 1, 25, 25, 5, 5, true); //Set parameters as follow...
 
@@ -30,7 +31,7 @@ void setup() {
     //Rotation time (Up): 25 sec (for full opening) (0 to 255 seconds)
     //Rotation time (Down): 25 sec (for full closing) (0 to 255 seconds)
     //Increments : 5
-    //Pause between increments : 5 (0 to 255 seconds)
+    //Pause between rotation : 5 (0 to 255 seconds)
     //Safety mode : ON (safety opening cycle every 30 min even if considered fully open)
 
 

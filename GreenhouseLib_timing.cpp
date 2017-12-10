@@ -1,208 +1,183 @@
-// Created by Loup Hébert-Chartrand on 12/06/17.
-// Copyright 2017 - Under creative commons license
-//
-// This software is furnished "as is", without technical support, and with no
-// warranty, express or implied, as to its usefulness for any purpose.
+/*
+  GreenhouseLib_timing.cpp
+  Copyright (C)2017 Loup Hébert-Chartrand. All right reserved
 
-#include "Arduino.h"
-#include "EEPROM.h"
-#include "elapsedMillis.h"
+  You can find the latest version of this code at :
+  https://github.com/LoupHC/GreenhouseLib
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This code is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
 #include "GreenhouseLib_timing.h"
+
 
 
 //****************************************************************
 //*******************TIMEZONES FUNCTIONS**************************
 //****************************************************************
-Timezone::Timezone(){
-  _localIndex = TIMEZONE_INDEX + _index;
+Timepoint::Timepoint(){
+  _type.setLimits(0, 2);
+  _mn.setLimits(-60, 60);
+  _hr.setLimits(0,60);
+  _coolingTemp.setLimits(0,50);
+  _heatingTemp.setLimits(0,50);
+  _localIndex = TIMEPOINT_INDEX + _index;
   _index += 5;
   EEPROMTimer = 0;
 }
 
-Timezone::~Timezone(){}
+Timepoint::~Timepoint(){}
 
-void Timezone::setParameters(byte type, short mod, float heatingTemp, float coolingTemp){
-	setType(type);
-	setTime(mod);
-	setHeatTemp(heatingTemp);
-	setCoolTemp(coolingTemp);
-	setMod(mod);
+void Timepoint::setParameters(byte type, short hour, short min, float heatingTemp, float coolingTemp){
+  	setType(type);
+    setTime(hour, min);
+    setHeatTemp(heatingTemp);
+    setCoolTemp(coolingTemp);
+
+    #ifdef DEBUG_PROGRAM
+      Serial.println(F("-----"));
+      Serial.println(F("Timepoint"));
+      Serial.print(F("Time : "));
+      Serial.print(_hr.value());
+      Serial.print(F(":"));
+      Serial.println(_mn.value());
+      Serial.print(F("Cooling temp : "));
+      Serial.println(_coolingTemp.value());
+      Serial.print(F("Heating temp : "));
+      Serial.println(_heatingTemp.value());
+    #endif
+
 }
-void Timezone::setParameters(byte type, byte hour, byte min, float heatingTemp, float coolingTemp){
-	setType(type)	;
-	setTime(hour,min);
-	setHeatTemp(heatingTemp);
-	setCoolTemp(coolingTemp);
-}
-void Timezone::setTime( short mod){
-	if (_type == SR){
+void Timepoint::setTime(short mod){
+	if (_type.value() == SR){
 		short Time[3];
-		Time[HEURE] = sunRise[HEURE];
-		Time[MINUTE] = sunRise[MINUTE] + mod;
-		convertDecimalToTime(&Time[HEURE], &Time[MINUTE]);
-		_hour = (byte)Time[HEURE];
-		_min = (byte)Time[MINUTE];
+		Time[HOUR] = sunRise[HOUR];
+		Time[MINUT] = sunRise[MINUT] + mod;
+		convertDecimalToTime(&Time[HOUR], &Time[MINUT]);
+		_hr.setValue(Time[HOUR]);
+		_mn.setValue(Time[MINUT]);
 	}
-	else if (_type == SS){
+	else if (_type.value() == SS){
 		short Time[3];
-		Time[HEURE] = sunSet[HEURE];
-		Time[MINUTE] = sunSet[MINUTE] + mod;
-		convertDecimalToTime(&Time[HEURE], &Time[MINUTE]);
-		_hour = (byte)Time[HEURE];
-		_min = (byte)Time[MINUTE];
+		Time[HOUR] = sunSet[HOUR];
+		Time[MINUT] = sunSet[MINUT] + mod;
+		convertDecimalToTime(&Time[HOUR], &Time[MINUT]);
+		_hr.setValue(Time[HOUR]);
+		_mn.setValue(Time[MINUT]);
 	}
 }
-void Timezone::setTime(byte hour, byte min){
-	if (_type == CLOCK){
-		_hour = hour;
-		_min = min;
+
+void Timepoint::setTime(short hour, short min){
+	if (_type.value() == SR){
+		short Time[3];
+		Time[HOUR] = sunRise[HOUR];
+		Time[MINUT] = sunRise[MINUT] + min;
+		convertDecimalToTime(&Time[HOUR], &Time[MINUT]);
+		_hr.setValue(Time[HOUR]);
+		_mn.setValue(Time[MINUT]);
+	}
+	else if (_type.value() == CLOCK){
+		_hr.setValue(hour);
+		_mn.setValue(min);
+  }
+	else if (_type.value() == SS){
+		short Time[3];
+		Time[HOUR] = sunSet[HOUR];
+		Time[MINUT] = sunSet[MINUT] + min;
+		convertDecimalToTime(&Time[HOUR], &Time[MINUT]);
+		_hr.setValue(Time[HOUR]);
+		_mn.setValue(Time[MINUT]);
 	}
 }
-void Timezone::setHeatTemp(float heatingTemp){
-	_heatingTemp = heatingTemp;
-}
-void Timezone::setCoolTemp(float coolingTemp){
-	_coolingTemp = coolingTemp;
-}
-void Timezone::setType(byte type){
-	_type = type;
-}
-void Timezone::setMod(short mod){
-	_mod = mod;
+
+void Timepoint::setHeatTemp(float heatingTemp){
+	_heatingTemp.setValue(heatingTemp);
 }
 
-void Timezone::loadEEPROMParameters(){
-  setType(EEPROM.read(_localIndex+TYPE_INDEX));
-  setMod((short)EEPROM.read(_localIndex+MOD_INDEX));
+void Timepoint::setCoolTemp(float coolingTemp){
+	_coolingTemp.setValue(coolingTemp);
+}
 
-  if ((_type == SR)||(_type == SS)){
-	  setTime((short)EEPROM.read(_localIndex+MOD_INDEX));
-  }
-  else if(_type == CLOCK){
-  	  setTime(EEPROM.read(_localIndex+HOUR_INDEX), EEPROM.read(_localIndex+MIN_INDEX));
-  }
-
-  setHeatTemp((float)EEPROM.read(_localIndex+HEAT_INDEX));
+void Timepoint::setType(byte type){
+	_type.setValue(type);
+  //If type is anything but CLOCK, minimum value for "mn" parameter is -60. Otherwise it's 0.
+  if (_type.value() == CLOCK){_mn.minimum(0);}
+  else{_mn.minimum(-60);}
+}
+/*
+void Timepoint::loadEEPROMParameters(){ndex+HEAT_INDEX));
   setCoolTemp((float)EEPROM.read(_localIndex+COOL_INDEX));
 }
 
-void Timezone::setParametersInEEPROM(byte type, short mod, float heatingTemp, float coolingTemp){
-	setTimeInEEPROM(type, mod);
-	setHeatTempInEEPROM(heatingTemp);
-	setCoolTempInEEPROM(coolingTemp);
-}
-
-void Timezone::setParametersInEEPROM(byte type, byte hour, byte min, float heatingTemp, float coolingTemp){
+void Timepoint::setParametersInEEPROM(byte type, short hour, short min, float heatingTemp, float coolingTemp){
 	setTimeInEEPROM(type, hour, min);
 	setHeatTempInEEPROM(heatingTemp);
 	setCoolTempInEEPROM(coolingTemp);
 }
 
-void Timezone::setTimeInEEPROM(byte type, short mod){
-	if ((type == SR)&&((mod >= -60) && (mod <= 60))){
-		short Time[3];
-		Time[HEURE] = sunRise[HEURE];
-		Time[MINUTE] = sunRise[MINUTE] + mod;
-		convertDecimalToTime(&Time[HEURE], &Time[MINUTE]);
-		EEPROM.update(_localIndex+HOUR_INDEX, (byte)Time[HEURE]);
-		EEPROM.update(_localIndex+MIN_INDEX, (byte)Time[MINUTE]);
-		EEPROM.update(_localIndex+TYPE_INDEX, type);
-		EEPROM.update(_localIndex+MOD_INDEX, mod);
-	}
-	else if ((type == SS)&&((mod >= -60) && (mod <= 60))){
-		short Time[3];
-		Time[HEURE] = sunSet[HEURE];
-		Time[MINUTE] = sunSet[MINUTE] + mod;
-		convertDecimalToTime(&Time[HEURE], &Time[MINUTE]);
-		EEPROM.update(_localIndex+HOUR_INDEX, (byte)Time[HEURE]);
-		EEPROM.update(_localIndex+MIN_INDEX, (byte)Time[MINUTE]);
-		EEPROM.update(_localIndex+TYPE_INDEX, type);
-		EEPROM.update(_localIndex+MOD_INDEX, mod);
-	}
-}
-
-void Timezone::setTimeInEEPROM(byte type, byte hour, byte min){
-	if (type == CLOCK){
+void Timepoint::setTimeInEEPROM(byte type, short hour, short min){
 		EEPROM.update(_localIndex+HOUR_INDEX, hour);
 		EEPROM.update(_localIndex+MIN_INDEX, min);
 		EEPROM.update(_localIndex+TYPE_INDEX, type);
-	}
 }
 
-void Timezone::setHeatTempInEEPROM(float heatingTemp){
+void Timepoint::setHeatTempInEEPROM(float heatingTemp){
 		EEPROM.update(_localIndex+COOL_INDEX, heatingTemp);
 }
-void Timezone::setCoolTempInEEPROM(float coolingTemp){
+void Timepoint::setCoolTempInEEPROM(float coolingTemp){
 		EEPROM.update(_localIndex+COOL_INDEX, coolingTemp);
 }
 #include "GreenhouseLib_actuators.h"
 
-
-void Timezone::EEPROMUpdate(){
+/*
+void Timepoint::EEPROMUpdate(){
   unsigned long currentMillis = millis();
   if (EEPROMTimer > 10000) {
     EEPROMTimer = 0;
 
-    if(_type != EEPROM.read(_localIndex+ TYPE_INDEX)){
-    		EEPROM.update(_localIndex+TYPE_INDEX, _type);
+    if(_type.value() != EEPROM.read(_localIndex+ TYPE_INDEX)){
+    		EEPROM.update(_localIndex+TYPE_INDEX, _type.value());
     }
-    if(_mod != EEPROM.read(_localIndex+ MOD_INDEX)){
-    		EEPROM.update(_localIndex+MOD_INDEX, _mod);
+    if(_hr.value() != EEPROM.read(_localIndex+ HOUR_INDEX)){
+    		EEPROM.update(_localIndex+HOUR_INDEX, _hr.value());
     }
-    if(_hour != EEPROM.read(_localIndex+ HOUR_INDEX)){
-    		EEPROM.update(_localIndex+HOUR_INDEX, _hour);
+    if(_mn.value() != EEPROM.read(_localIndex+ MIN_INDEX)){
+    		EEPROM.update(_localIndex+MIN_INDEX, _mn.value());
     }
-    if(_min != EEPROM.read(_localIndex+ MIN_INDEX)){
-    		EEPROM.update(_localIndex+MIN_INDEX, _type);
+    if(_heatingTemp.value() != EEPROM.read(_localIndex+ HEAT_INDEX)){
+    		EEPROM.update(_localIndex+HEAT_INDEX, _heatingTemp.value());
     }
-    if(_heatingTemp != EEPROM.read(_localIndex+ HEAT_INDEX)){
-    		EEPROM.update(_localIndex+HEAT_INDEX, _heatingTemp);
-    }
-    if(_coolingTemp != EEPROM.read(_localIndex+ COOL_INDEX)){
-    		EEPROM.update(_localIndex+COOL_INDEX, _coolingTemp);
+    if(_coolingTemp.value() != EEPROM.read(_localIndex+ COOL_INDEX)){
+    		EEPROM.update(_localIndex+COOL_INDEX, _coolingTemp.value());
     }
  }
 }
-
-unsigned short Timezone::hr(){
-  return _hour;
+*/
+unsigned short Timepoint::hr(){
+  return _hr.value();
 }
-unsigned short Timezone::mn(){
-  return _min;
+unsigned short Timepoint::mn(){
+  return _mn.value();
 }
-float Timezone::heatingTemp(){
-  return _heatingTemp;
+float Timepoint::heatingTemp(){
+  return _heatingTemp.value();
 }
-float Timezone::coolingTemp(){
-  return _coolingTemp;
-}
-
-static unsigned short Timezone::_index = 0;
-
-static short Timezone::sunRise[3] = {0};
-static short Timezone::sunSet[3] = {0};
-
-
-//****************************************************************
-//*******************TOOLBOX**************************************
-//****************************************************************
-
-byte negativeToByte(int data, byte mod){
-  return data+mod;
+float Timepoint::coolingTemp(){
+  return _coolingTemp.value();
 }
 
-int byteToNegative(int data, byte mod){
-  return data-mod;
-}
-//Programme pour convertir l'addition de nombres décimales en format horaire
-void convertDecimalToTime(int * heure, int * minut){
-  //Serial.println(m);
-  if ((*minut > 59) && (*minut < 120)){
-    *heure += 1;
-    *minut -= 60;
-  }
-  else if ((*minut < 0) && (*minut >= -60)){
-    *heure -= 1;
-    *minut +=60;
-  }
-}
+static unsigned short Timepoint::_index = 0;
+
+static short Timepoint::sunRise[3] = {0};
+static short Timepoint::sunSet[3] = {0};
