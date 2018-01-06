@@ -1,5 +1,6 @@
 /*
   GreenhouseLib_FF.h
+  Copyright (C)2017 Loup Hébert-Chartrand. All right reserved
 
   You can find the latest version of this code at :
   https://github.com/LoupHC/GreenhouseLib
@@ -25,6 +26,9 @@
 #include "Parameters.h"
 #include "Defines.h"
 
+
+
+
 #ifndef GreenhouseLib_FF_h
 #define GreenhouseLib_FF_h
 
@@ -45,7 +49,7 @@ class Fan
       Fan();
       ~Fan();
       void initFan();
-      void initOutput(byte mode, byte pin);
+      void initOutput(byte mode, byte relayType, byte pin);
 
       //action functions
       void routine(float temp);
@@ -80,6 +84,9 @@ class Fan
     private:
 			//Parameters
 			byte _mode;
+      boolean _relayType;
+      boolean _activate;
+      boolean _desactivate;
 			byte _pin;
 			floatParameter _hyst;
 			floatParameter _tempParameter;
@@ -93,6 +100,7 @@ class Fan
       static unsigned short _index;
 			//Timer
 		elapsedMillis EEPROMTimer;
+
 };
 
 /*
@@ -111,7 +119,7 @@ class Heater
       Heater();
       ~Heater();
       void initHeater();
-      void initOutput(byte mode, byte pin);
+      void initOutput(byte mode, byte relayType, byte pin);
 
       //action functions
       void routine(float temp);
@@ -146,6 +154,9 @@ class Heater
     private:
 			//const parameters
 			byte _mode;
+      boolean _relayType;
+      boolean _activate;
+      boolean _desactivate;
 		  byte _pin;
 
       //Parameters
@@ -161,6 +172,7 @@ class Heater
       static unsigned short _index;
 			//timer
 			elapsedMillis EEPROMTimer;
+
 };
 
 #endif

@@ -106,6 +106,7 @@ class Rollup
     void setRotationDown(unsigned short rotation);
     void setIncrements(unsigned short increments);
     void setPause(unsigned short pause);
+    void setStageParameters(byte number, float mod, byte target);
     void setStageMod(byte number, float value);
     void setStageTarget(byte number, byte value);
     void setSafety(boolean safety);
@@ -154,11 +155,14 @@ class Rollup
     boolean _safety;
     Stage stage[MAX_STAGES];
 
+
     //const parameters
     byte _mode;
     byte _openingPin;
     byte _closingPin;
     boolean _relayType;
+    boolean _activate;
+    boolean _desactivate;
 
 		//Logic variables
 		unsigned short _incrementCounter;
@@ -182,6 +186,7 @@ class Rollup
     static unsigned short _index;
 
 		//private functions
+    void action(byte pin, boolean state);
     void openSides();
     void closingSides();
 		void safetyCycle();

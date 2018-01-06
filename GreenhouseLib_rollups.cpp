@@ -144,22 +144,51 @@ void Rollup::initRollup(byte stages){
     EEPROMTimer = 0;
 }
 void Rollup::initOutputs(byte mode, boolean relayType, byte rOpen, byte rClose){
+  //set minimum/maximum values for tempParameter
+  _mode = mode;
 
-  pinMode(rOpen, OUTPUT);
-  pinMode(rClose, OUTPUT);
-
-  if(relayType == ACT_HIGH){
-  	digitalWrite(rOpen, LOW);
-  	digitalWrite(rClose, LOW);
+  if (_mode == FIX_TEMP){
+    _tempParameter.minimum(0);
+    _tempParameter.maximum(50);
   }
-  else if (relayType == ACT_LOW){
-  	digitalWrite(rOpen, HIGH);
-  	digitalWrite(rClose, HIGH);
+  else if(_mode == VAR_TEMP){
+    _tempParameter.minimum(-5);
+    _tempParameter.maximum(10);
   }
+  else if(_mode == MAN_TEMP){
+    _tempParameter.minimum(0);
+    _tempParameter.maximum(0);
+  }
+  //define opening/closing pins
   _openingPin = rOpen;
   _closingPin = rClose;
-  _mode = mode;
+
+  //set actions related to digitalWrite state, according to relay type
   _relayType = relayType;
+  if (_relayType == ACT_HIGH){
+    _activate = true;
+    _desactivate = false;
+  }
+  else if (_relayType == ACT_LOW){
+    _activate = false;
+    _desactivate = true;
+  }
+
+  //initial state
+  #ifdef IOS_OUTPUTS
+    pinMode(_openingPin, OUTPUT);
+    pinMode(_closingPin, OUTPUT);
+    digitalWrite(_openingPin, _desactivate);
+    digitalWrite(_closingPin, _desactivate);
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS;
+    mcp.pinMode(_openingPin, OUTPUT);
+    mcp.pinMode(_closingPin, OUTPUT);
+    mcp.digitalWrite(_openingPin, LOW);
+    mcp.digitalWrite(_closingPin, LOW);
+  #endif
+
 }
 
 void Rollup::initStage(Stage stage, float mod, byte inc){
@@ -477,15 +506,31 @@ void Rollup::activateRoutine(){
 Activate or desactivate the opening or closing relay
 */
 
+void Rollup::action(byte pin, boolean state){
+  #ifdef IOS_OUTPUTS
+    if(state == ON){
+      digitalWrite(pin, _activate);
+    }
+    else if (state == OFF){
+      digitalWrite(pin, _desactivate);
+    }
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS
+    if(state == ON){
+      mcp.digitalWrite(pin, HIGH);
+    }
+    else if (state == OFF){
+      mcp.digitalWrite(pin, LOW);
+    }
+  #endif
+}
+
+
 void Rollup::startOpening(){
 	if(_closing == false){
 		_opening = true;
-    if(_relayType == ACT_HIGH){
-    	digitalWrite(_openingPin, HIGH);
-    }
-    else if (_relayType == ACT_LOW){
-    	digitalWrite(_openingPin, LOW);
-    }
+    action(_openingPin, ON);
 
     #ifdef DEBUG_ROLLUP_TIMING
       Serial.println(F("-------------"));
@@ -498,12 +543,8 @@ void Rollup::startOpening(){
 void Rollup::startClosing(){
 	if(_opening == false){
 		_closing = true;
-    if(_relayType == ACT_HIGH){
-    	digitalWrite(_closingPin, HIGH);
-    }
-    else if (_relayType == ACT_LOW){
-    	digitalWrite(_closingPin, LOW);
-    }
+    action(_closingPin, ON);
+
     #ifdef DEBUG_ROLLUP_TIMING
       Serial.println(F("-------------"));
       Serial.println(F("closing"));
@@ -515,12 +556,8 @@ void Rollup::startClosing(){
 void Rollup::stopOpening(){
 	if(_opening == true){
 		_opening = false;
-    if(_relayType == ACT_HIGH){
-    	digitalWrite(_openingPin, LOW);
-    }
-    else if (_relayType == ACT_LOW){
-    	digitalWrite(_openingPin, HIGH);
-    }
+    action(_openingPin, OFF);
+
     #ifdef DEBUG_ROLLUP_TIMING
       Serial.println(F("-------------"));
       Serial.println(F("stop opening"));
@@ -532,12 +569,8 @@ void Rollup::stopOpening(){
 void Rollup::stopClosing(){
 	if(_closing == true){
 		_closing = false;
-    if(_relayType == ACT_HIGH){
-    	digitalWrite(_closingPin, LOW);
-    }
-    else if (_relayType == ACT_LOW){
-    	digitalWrite(_closingPin, HIGH);
-    }
+    action(_closingPin, OFF);
+
     #ifdef DEBUG_ROLLUP_TIMING
       Serial.println(F("-------------"));
       Serial.println(F("stop closing"));
@@ -695,11 +728,17 @@ void Rollup::setIncrementCounter(unsigned short increment){
   _incrementCounter = increment;
 }
 
+void Rollup::setStageParameters(byte number, float mod, byte target){
+    setStageMod(number,mod);
+    setStageTarget(number,target);
+}
+
 void Rollup::setStageMod(byte number, float value){
   stage[number-1].setMod(value);
 }
 void Rollup::setStageTarget(byte number, byte value){
   stage[number-1].setTarget(value);
+
 
 }
 /*

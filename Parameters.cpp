@@ -38,6 +38,29 @@ void floatParameter::setValue(float value){
     _value = 333;
   }
 }
+
+void floatParameter::setLastValue(float lastValue){
+  if((lastValue >= _minimum)&&(lastValue <= _maximum)){
+    _lastValue = lastValue;
+  }
+  else{
+    _lastValue = 333;
+  }
+}
+
+void floatParameter::updateLastValue(){
+  setLastValue(_value);
+}
+
+boolean floatParameter::valueHasChanged(){
+  if(_value == _lastValue){
+    return false;
+  }
+  else{
+    return true;
+  }
+}
+
 void floatParameter::setLimits(float minimum, float maximum){
   _minimum = minimum;
   _maximum = maximum;
@@ -52,6 +75,9 @@ void floatParameter::maximum(float maximum){
 
 float floatParameter::value(){
   return _value;
+}
+float floatParameter::lastValue(){
+  return _lastValue;
 }
 
 //short parameters
@@ -68,7 +94,27 @@ void shortParameter::setValue(short value){
     _value = 333;
   }
 }
+void shortParameter::setLastValue(short lastValue){
+  if((lastValue >= _minimum)&&(lastValue <= _maximum)){
+    _lastValue = lastValue;
+  }
+  else{
+    _lastValue = 333;
+  }
+}
 
+void shortParameter::updateLastValue(){
+  setLastValue(_value);
+}
+
+boolean shortParameter::valueHasChanged(){
+  if(_value == _lastValue){
+    return false;
+  }
+  else{
+    return true;
+  }
+}
 void shortParameter::setLimits(short minimum, short maximum){
   _minimum = minimum;
   _maximum = maximum;
@@ -85,6 +131,10 @@ short shortParameter::value(){
   return _value;
 }
 
+short shortParameter::lastValue(){
+  return _lastValue;
+}
+
 //unsigned short parameters
 
 uShortParameter::uShortParameter(){}
@@ -99,6 +149,28 @@ void uShortParameter::setValue(unsigned short value){
     _value = 333;
   }
 }
+void uShortParameter::setLastValue(unsigned short lastValue){
+  if((lastValue >= _minimum)&&(lastValue <= _maximum)){
+    _lastValue = lastValue;
+  }
+  else{
+    _lastValue = 333;
+  }
+}
+
+void uShortParameter::updateLastValue(){
+  setLastValue(_value);
+}
+
+boolean uShortParameter::valueHasChanged(){
+  if(_value == _lastValue){
+    return false;
+  }
+  else{
+    return true;
+  }
+}
+
 void uShortParameter::setLimits(unsigned short minimum, unsigned short maximum){
   _minimum = minimum;
   _maximum = maximum;
@@ -113,6 +185,10 @@ void uShortParameter::maximum(unsigned short maximum){
 
 unsigned short uShortParameter::value(){
   return _value;
+}
+
+unsigned short uShortParameter::lastValue(){
+  return _lastValue;
 }
 
 //Byte parameter
@@ -130,6 +206,28 @@ void byteParameter::setValue(byte value){
   }
 }
 
+void byteParameter::setLastValue(byte lastValue){
+  if((lastValue >= _minimum)&&(lastValue <= _maximum)){
+    _lastValue = lastValue;
+  }
+  else{
+    _lastValue = 333;
+  }
+}
+
+void byteParameter::updateLastValue(){
+  setLastValue(_value);
+}
+
+boolean byteParameter::valueHasChanged(){
+  if(_value == _lastValue){
+    return false;
+  }
+  else{
+    return true;
+  }
+}
+
 void byteParameter::setLimits (byte minimum, byte maximum){
   _minimum = minimum;
   _maximum = maximum;
@@ -144,6 +242,10 @@ void byteParameter::maximum(byte maximum){
 
 byte byteParameter::value(){
   return _value;
+}
+
+byte byteParameter::lastValue(){
+  return _lastValue;
 }
 
 

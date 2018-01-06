@@ -1,5 +1,6 @@
 /*
   GreenhouseLib_FF.cpp
+  Copyright (C)2017 Loup Hébert-Chartrand. All right reserved
 
   You can find the latest version of this code at :
   https://github.com/LoupHC/GreenhouseLib
@@ -25,7 +26,7 @@
 //****************************************************************/
 
 Fan::Fan(){
-    _tempParameter.setLimits(-5, 10);
+    _tempParameter.setLimits(-5, 50);
     _hyst.setLimits(0,5);
     _hyst.maximum(5);
 
@@ -39,10 +40,10 @@ Fan::Fan(){
 static unsigned short Fan::_index = 0;
 
 Fan::~Fan(){}
+
 void Fan::initFan(){
-    _tempParameter.setLimits(-5, 10);
+    _tempParameter.setLimits(-5, 50);
     _hyst.setLimits(0,5);
-    _hyst.maximum(5);
 
     _debug = false;
     _routine = true;
@@ -51,19 +52,41 @@ void Fan::initFan(){
     EEPROMTimer = 0;
 }
 
-void Fan::initOutput(byte mode, byte pin){
+void Fan::initOutput(byte mode, byte relayType, byte pin){
+
+  _pin = pin;
+
+  //set minimum/maximum values for tempParameter
+ _mode = mode;
+  if (_mode == FIX_TEMP){
+    _tempParameter.setLimits(0,50);
+  }
+  else if(_mode = VAR_TEMP){
+    _tempParameter.setLimits(-5,10);
+  }
+
+  //set action linked to digitalWrite state, according to relay type
+ _relayType = relayType;
+ if (_relayType == ACT_HIGH){
+   _activate = HIGH;
+   _desactivate = LOW;
+ }
+ else if (_relayType == ACT_LOW){
+   _activate = LOW;
+   _desactivate = HIGH;
+ }
+
+ //initial state
+  #ifdef IOS_OUTPUTS
     pinMode(pin, OUTPUT);
-    digitalWrite(pin, LOW);
-    _pin = pin;
-	 _mode = mode;
-   if (_mode == FIX_TEMP){
-     _tempParameter.minimum(0);
-     _tempParameter.maximum(50);
-   }
-   else if(_mode = VAR_TEMP){
-     _tempParameter.minimum(-5);
-     _tempParameter.maximum(10);
-   }
+    digitalWrite(pin, _desactivate);
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS
+    mcp.pinMode(pin, OUTPUT);
+    mcp.digitalWrite(pin, _desactivate);
+  #endif
+
  }
 
 //action functions
@@ -107,22 +130,56 @@ void Fan::routine(float target, float temp){
   }
 }
 void Fan::stop(){
+  #ifdef IOS_OUTPUTS
+
   if(digitalRead(_pin) == HIGH){
-    digitalWrite(_pin, LOW);
+    digitalWrite(_pin, _desactivate);
     #ifdef DEBUG_FAN
-      Serial.println(F("Fan : off"));
+      Serial.println(F("-------------"));
+      Serial.println(F("Stop fan"));
+      Serial.println(F("-------------"));
     #endif
   }
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS
+
+  if(mcp.digitalRead(_pin) == HIGH){
+    mcp.digitalWrite(_pin, _desactivate);
+    #ifdef DEBUG_FAN
+      Serial.println(F("-------------"));
+      Serial.println(F("Stop fan"));
+      Serial.println(F("-------------"));
+    #endif
+  }
+  #endif
 }
 
 void Fan::start(){
-  if(digitalRead(_pin) == LOW){
-    digitalWrite(_pin, HIGH);
-    #ifdef DEBUG_FAN
-    Serial.println(F("Fan : on"));
+    #ifdef IOS_OUTPUTS
+
+      if(digitalRead(_pin) == LOW){
+        digitalWrite(_pin, _activate);
+        #ifdef DEBUG_FAN
+          Serial.println(F("-------------"));
+          Serial.println(F("Start fan"));
+          Serial.println(F("-------------"));
+        #endif
+      }
+    #endif
+
+    #ifdef MCP_I2C_OUTPUTS
+
+      if(mcp.digitalRead(_pin) == LOW){
+        mcp.digitalWrite(_pin, _activate);
+        #ifdef DEBUG_FAN
+          Serial.println(F("-------------"));
+          Serial.println(F("Start fan"));
+          Serial.println(F("-------------"));
+        #endif
+      }
     #endif
   }
-}
 /*
 Activate or desactivate the routine function
 */
@@ -249,9 +306,8 @@ boolean Fan::debug(){
 //****************************************************************
 
 Heater::Heater(){
-    _tempParameter.setLimits(-10, 5);
+    _tempParameter.setLimits(-10, 50);
     _hyst.setLimits(0,5);
-    _hyst.maximum(5);
 
 	  _debug = false;
     _routine = true;
@@ -265,9 +321,8 @@ static unsigned short Heater::_index = 0;
 Heater::~Heater(){}
 
 void Heater::initHeater(){
-    _tempParameter.setLimits(-10, 5);
+    _tempParameter.setLimits(-10, 50);
     _hyst.setLimits(0,5);
-    _hyst.maximum(5);
 
     _debug = false;
     _routine = true;
@@ -276,19 +331,40 @@ void Heater::initHeater(){
     EEPROMTimer = 0;
 }
 
-void Heater::initOutput(byte mode, byte pin){
+void Heater::initOutput(byte mode, byte relayType, byte pin){
+  _pin = pin;
+
+  //set minimum/maximum values for tempParameter
+ _mode = mode;
+  if (_mode == FIX_TEMP){
+    _tempParameter.setLimits(0,50);
+  }
+  else if(_mode = VAR_TEMP){
+    _tempParameter.setLimits(-10,5);
+  }
+
+ //set action linked to digitalWrite state, according to relay type
+ _relayType = relayType;
+ if (_relayType == ACT_HIGH){
+   _activate = HIGH;
+   _desactivate = LOW;
+ }
+ else if (_relayType == ACT_LOW){
+   _activate = LOW;
+   _desactivate = HIGH;
+ }
+
+ //initial state
+  #ifdef IOS_OUTPUTS
     pinMode(pin, OUTPUT);
-    digitalWrite(pin, LOW);
-    _pin = pin;
-    _mode = mode;
-    if (_mode == FIX_TEMP){
-      _tempParameter.minimum(0);
-      _tempParameter.maximum(50);
-    }
-    else if(_mode = VAR_TEMP){
-      _tempParameter.minimum(-10);
-      _tempParameter.maximum(5);
-    }
+    digitalWrite(pin, _desactivate);
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS
+    mcp.pinMode(pin, OUTPUT);
+    mcp.digitalWrite(pin, _desactivate);
+  #endif
+
  }
 
 //action functions
@@ -332,22 +408,56 @@ void Heater::routine(float target, float temp){
   }
 }
 void Heater::stop(){
-  if(digitalRead(_pin) == HIGH){
-    digitalWrite(_pin, LOW);
-    #ifdef DEBUG_HEATER
-      Serial.println(F("Heater : off"));
-    #endif
+  #ifdef IOS_OUTPUTS
+    if(digitalRead(_pin) == HIGH){
+      digitalWrite(_pin, _desactivate);
+      #ifdef DEBUG_HEATER
+        Serial.println(F("-------------"));
+        Serial.println(F("Stop heater"));
+        Serial.println(F("-------------"));
+      #endif
+    }
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS
+
+    if(mcp.digitalRead(_pin) == HIGH){
+      mcp.digitalWrite(_pin, _desactivate);
+      #ifdef DEBUG_HEATER
+        Serial.println(F("-------------"));
+        Serial.println(F("Stop heater"));
+        Serial.println(F("-------------"));
+      #endif
+    }
+  #endif
   }
-}
 
 void Heater::start(){
-  if(digitalRead(_pin) == LOW){
-    digitalWrite(_pin, HIGH);
+  #ifdef IOS_OUTPUTS
+    if(digitalRead(_pin) == LOW){
+      digitalWrite(_pin, _activate);
+
     #ifdef DEBUG_HEATER
-      Serial.println(F("Heater : on"));
+      Serial.println(F("-------------"));
+      Serial.println(F("Start heater"));
+      Serial.println(F("-------------"));
     #endif
+    }
+  #endif
+
+  #ifdef MCP_I2C_OUTPUTS
+    if(mcp.digitalRead(_pin) == LOW){
+      mcp.digitalWrite(_pin, _activate);
+
+    #ifdef DEBUG_HEATER
+      Serial.println(F("-------------"));
+      Serial.println(F("Start heater"));
+      Serial.println(F("-------------"));
+    #endif
+    }
+  #endif
   }
-}
+
 /*
 Activate or desactivate the routine function
 */
@@ -379,6 +489,25 @@ void Heater::setTemp(float temp){
 
 void Heater::setSafety(boolean safety){
   _safety = safety;
+}
+
+byte Heater::mode(){
+  return _mode;
+}
+byte Heater::pin(){
+  return _pin;
+}
+float Heater::hyst(){
+  return _hyst.value();
+}
+float Heater::tempParameter(){
+  return _tempParameter.value();
+}
+boolean Heater::safety(){
+  return _safety;
+}
+boolean Heater::debug(){
+  return _debug;
 }
 /*
 void Heater::setParametersInEEPROM(short temp, byte hyst, boolean safety){

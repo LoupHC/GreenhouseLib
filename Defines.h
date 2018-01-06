@@ -4,16 +4,20 @@
 #ifndef Defines_h
 #define Defines_h
 
+
 //Debug lines
-#define DEBUG_ROLLUP_TIMING
+//#define DEBUG_ROLLUP_TIMING
 //#define DEBUG_ROLLUP_TEMP
 //#define DEBUG_FAN
 //#define DEBUG_HEATER
 //#define DEBUG_EEPROM
-#define DEBUG_PROGRAM
+//#define DEBUG_PROGRAM
 //#define DEBUG_SOLARCALC
-#define DEBUG_CLOCK
+//#define DEBUG_CLOCK
 
+//Outputs type
+#define IOS_OUTPUTS
+//#define MCP_I2C_OUTPUTS
 
 #define TIMEPOINT_INDEX 0
 #define ROLLUP_INDEX 50
@@ -50,5 +54,15 @@
 #define SR 0
 #define CLOCK 1
 #define SS 2
+
+#define ON true
+#define OFF false
+
+#ifdef MCP_I2C_OUTPUTS
+  #include <Wire.h>
+  #include "Adafruit_MCP23008.h"
+  extern  Adafruit_MCP23008 mcp;
+#endif
+
 
 #endif
